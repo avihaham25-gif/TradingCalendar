@@ -5,6 +5,9 @@ import json
 import os
 import ctypes
 
+from ib_controller import IBController
+from account_panel import AccountPanel
+
 ctk.set_appearance_mode("dark")
 
 COLOR_BG = "#0f0f0f"
@@ -45,6 +48,15 @@ class TradingCalendar(ctk.CTk):
         self.grid_rowconfigure(3, weight=0)
         self.grid_columnconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=0)
+
+        # IB Integration – Controller + Account Panel
+        self._ib_controller = IBController(
+            root=self,
+            on_data_received=self._on_ib_data,
+            on_error=self._on_ib_error,
+            config_path="config.json",
+        )
+
         self.setup_ui()
 
     def load_data(self):
@@ -108,8 +120,16 @@ class TradingCalendar(ctk.CTk):
         self.sidebar.grid(row=0, column=1, rowspan=4, sticky="nsew")
         self.sidebar.grid_propagate(False)
         self.sidebar.pack_propagate(False)
+
+        # IB Account Panel – at top of sidebar
+        self._account_panel = AccountPanel(self.sidebar, controller=self._ib_controller)
+        self._account_panel.pack(fill="x", padx=8, pady=(10, 6))
+
+        # Trade details area (below account panel) – rebuilt on day selection
+        self._sidebar_content = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        self._sidebar_content.pack(fill="both", expand=True)
         
-        ctk.CTkLabel(self.sidebar, text="בחר יום\nמהלוח", font=("Helvetica Neue", 15), text_color=COLOR_SUBTEXT, justify="center").pack(expand=True)
+        ctk.CTkLabel(self._sidebar_content, text="בחר יום\nמהלוח", font=("Helvetica Neue", 15), text_color=COLOR_SUBTEXT, justify="center").pack(expand=True)
         self.draw_calendar()
 
     def draw_calendar(self):
@@ -169,8 +189,8 @@ class TradingCalendar(ctk.CTk):
         self.draw_calendar()
 
     def clear_sidebar(self):
-        for w in self.sidebar.winfo_children(): w.destroy()
-        ctk.CTkLabel(self.sidebar, text="בחר יום\nמהלוח", font=("Helvetica Neue", 15), text_color=COLOR_SUBTEXT, justify="center").pack(expand=True)
+        for w in self._sidebar_content.winfo_children(): w.destroy()
+        ctk.CTkLabel(self._sidebar_content, text="בחר יום\nמהלוח", font=("Helvetica Neue", 15), text_color=COLOR_SUBTEXT, justify="center").pack(expand=True)
 
     def select_day(self, date_id):
         self.selected_date = str(date_id)
@@ -178,8 +198,8 @@ class TradingCalendar(ctk.CTk):
         self.open_sidebar(self.selected_date)
 
     def open_sidebar(self, date_id):
-        for w in self.sidebar.winfo_children(): w.destroy()
-        header = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        for w in self._sidebar_content.winfo_children(): w.destroy()
+        header = ctk.CTkFrame(self._sidebar_content, fg_color="transparent")
         header.pack(fill="x", padx=16, pady=(18, 6))
 
         try:
@@ -191,7 +211,7 @@ class TradingCalendar(ctk.CTk):
 
         ctk.CTkLabel(header, text=date_str, font=("Helvetica Neue", 19, "bold"), text_color=COLOR_TEXT).pack(side="right")
         total = self.day_total(date_id)
-        summary_frame = ctk.CTkFrame(self.sidebar, fg_color=COLOR_ROW_BG, corner_radius=10)
+        summary_frame = ctk.CTkFrame(self._sidebar_content, fg_color=COLOR_ROW_BG, corner_radius=10)
         summary_frame.pack(fill="x", padx=16, pady=(0, 10))
 
         if total is None: summary_text, summary_color = "אין עסקאות היום", COLOR_SUBTEXT
@@ -200,15 +220,15 @@ class TradingCalendar(ctk.CTk):
 
         ctk.CTkLabel(summary_frame, text=summary_text, font=("Helvetica Neue", 15, "bold"), text_color=summary_color).pack(pady=10)
 
-        list_header = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        list_header = ctk.CTkFrame(self._sidebar_content, fg_color="transparent")
         list_header.pack(fill="x", padx=16, pady=(0, 6))
         ctk.CTkLabel(list_header, text="עסקאות", font=("Helvetica Neue", 13), text_color=COLOR_SUBTEXT).pack(side="right")
 
-        self.tx_list = ctk.CTkScrollableFrame(self.sidebar, fg_color="transparent", scrollbar_button_color="#333")
+        self.tx_list = ctk.CTkScrollableFrame(self._sidebar_content, fg_color="transparent", scrollbar_button_color="#333")
         self.tx_list.pack(fill="both", expand=True, padx=10)
         self.refresh_tx_list(date_id)
 
-        add_frame = ctk.CTkFrame(self.sidebar, fg_color=COLOR_ROW_BG, corner_radius=12)
+        add_frame = ctk.CTkFrame(self._sidebar_content, fg_color=COLOR_ROW_BG, corner_radius=12)
         add_frame.pack(fill="x", padx=16, pady=(8, 16))
         ctk.CTkLabel(add_frame, text="הוסף עסקה חדשה", font=("Helvetica Neue", 13, "bold"), text_color=COLOR_TEXT).pack(pady=(10, 4))
         
@@ -290,6 +310,18 @@ class TradingCalendar(ctk.CTk):
             self.save_data()
             self.draw_calendar()
             self.open_sidebar(date_id)
+
+    # =========================================================================
+    # IB Integration Callbacks (called via root.after – main thread safe)
+    # =========================================================================
+
+    def _on_ib_data(self, data):
+        """Callback: IBController fetched account data successfully."""
+        self._account_panel.on_data_received(data)
+
+    def _on_ib_error(self, message):
+        """Callback: IBController encountered an error."""
+        self._account_panel.on_error(message)
 
 if __name__ == "__main__":
     TradingCalendar().mainloop()
