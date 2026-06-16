@@ -7,6 +7,7 @@ import ctypes
 
 from ib_controller import IBController
 from account_panel import AccountPanel
+from path_utils import get_bundled_path, get_user_data_path, get_config_path
 
 ctk.set_appearance_mode("dark")
 
@@ -34,9 +35,9 @@ class TradingCalendar(ctk.CTk):
         self.geometry("1500x780")
         self.configure(fg_color=COLOR_BG)
         self.attributes("-alpha", 0.97)
-        try: self.iconbitmap("app_icon.ico")
+        try: self.iconbitmap(get_bundled_path("app_icon.ico"))
         except: pass
-        self.data_file = "trading_data.json"
+        self.data_file = get_user_data_path("trading_data.json")
         self.trading_data = self.load_data()
         self.view_date = datetime.now()
         self.current_month = self.view_date.month
@@ -54,7 +55,7 @@ class TradingCalendar(ctk.CTk):
             root=self,
             on_data_received=self._on_ib_data,
             on_error=self._on_ib_error,
-            config_path="config.json",
+            config_path=get_config_path(),
         )
 
         self.setup_ui()

@@ -1,0 +1,11 @@
+{
+    "ib_connection": {
+        "host": "127.0.0.1",
+        "port": 7496,
+        "client_id": 1,
+        "timeout_seconds": 5
+    },
+    "display": {
+        "stale_threshold_minutes": 5
+    }
+}
